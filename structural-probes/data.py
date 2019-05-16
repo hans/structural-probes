@@ -4,6 +4,7 @@ This module handles the reading of conllx files and hdf5 embeddings.
 Specifies Dataset classes, which offer PyTorch Dataloaders for the
 train/dev/test splits.
 """
+import codecs
 import os
 from collections import namedtuple, defaultdict
 
@@ -119,7 +120,7 @@ class SimpleDataset:
       A list of Observations 
     '''
     observations = []
-    lines = (x for x in open(filepath))
+    lines = (x for x in codecs.open(filepath, encoding="utf-8"))
     for buf in self.generate_lines_for_sent(lines):
       conllx_lines = []
       for line in buf:
