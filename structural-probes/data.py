@@ -167,8 +167,8 @@ class SimpleDataset:
       AssertionError: sent_length of embedding was not the length of the
         corresponding sentence in the dataset.
     '''
-    hf = h5py.File(filepath, 'r') 
-    indices = filter(lambda x: x != 'sentence_to_index', list(hf.keys()))
+    hf = h5py.File(filepath, 'r')
+    indices = filter(lambda x: x not in ['sentence_to_index', "tokenized_sentences"], list(hf.keys()))
     single_layer_features_list = []
     for index in sorted([int(x) for x in indices]):
       observation = observations[index]
@@ -374,10 +374,10 @@ class BERTDataset(SubwordDataset):
       try:
         from pytorch_pretrained_bert import BertTokenizer
         if self.args['model']['hidden_dim'] == 768:
-          subword_tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
+          subword_tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
           print('Using BERT-base-cased tokenizer to align embeddings with PTB tokens')
         elif self.args['model']['hidden_dim'] == 1024:
-          subword_tokenizer = BertTokenizer.from_pretrained('bert-large-cased')
+          subword_tokenizer = BertTokenizer.from_pretrained('bert-large-uncased')
           print('Using BERT-large-cased tokenizer to align embeddings with PTB tokens')
         else:
           print("The heuristic used to choose BERT tokenizers has failed...")
@@ -386,17 +386,20 @@ class BERTDataset(SubwordDataset):
         print('Couldn\'t import pytorch-pretrained-bert. Exiting...')
         exit()
     hf = h5py.File(filepath, 'r')
-    indices = list(hf.keys())
+    indices = filter(lambda x: x not in ['sentence_to_index', 'tokenized_sentences'], list(hf.keys()))
     single_layer_features_list = []
     for index in tqdm(sorted([int(x) for x in indices]), desc='[aligning embeddings]'):
       observation = observations[index]
       feature_stack = hf[str(index)]
       single_layer_features = feature_stack[elmo_layer]
-      tokenized_sent = subword_tokenizer.wordpiece_tokenizer.tokenize('[CLS] ' + ' '.join(observation.sentence) + ' [SEP]')
+      tokenized_sent = hf["tokenized_sentences"][str(index)][()].split(" ")
       untokenized_sent = observation.sentence
       untok_tok_mapping = self.match_tokenized_to_untokenized(tokenized_sent, untokenized_sent)
       assert single_layer_features.shape[0] == len(tokenized_sent)
-      single_layer_features = torch.tensor([np.mean(single_layer_features[untok_tok_mapping[i][0]:untok_tok_mapping[i][-1]+1,:], axis=0) for i in range(len(untokenized_sent))])
+      single_layer_features = torch.tensor(
+          [np.mean(single_layer_features[untok_tok_mapping[i][0]:untok_tok_mapping[i][-1]+1,:], axis=0)
+           for i in range(len(untokenized_sent))],
+          dtype=torch.float32)
       assert single_layer_features.shape[0] == len(observation.sentence)
       single_layer_features_list.append(single_layer_features)
     return single_layer_features_list
